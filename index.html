@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WMS Inventory</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+  :root {
+    --bg:#0f1117;--surface:#181c27;--surface2:#1e2336;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+    --text:#e8eaf0;--text2:#7c82a0;--text3:#4a506a;
+    --accent:#4f8ef7;--accent-dim:rgba(79,142,247,0.12);
+    --green:#2ecc8a;--green-dim:rgba(46,204,138,0.12);
+    --amber:#f5a623;--amber-dim:rgba(245,166,35,0.12);
+    --red:#f05050;--red-dim:rgba(240,80,80,0.12);
+    --purple:#a78bfa;--purple-dim:rgba(167,139,250,0.12);
+    --radius:10px;--radius-sm:6px;--mono:'JetBrains Mono',monospace;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5}
+  .shell{display:flex;height:100vh;overflow:hidden}
+
+  /* SIDEBAR */
+  .sidebar{width:220px;min-width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+  .logo{padding:22px 20px 18px;border-bottom:1px solid var(--border)}
+  .logo-mark{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--accent);letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px}
+  .logo-name{font-size:17px;font-weight:600;color:var(--text);letter-spacing:-.02em}
+  .nav{padding:12px 10px;flex:1;overflow-y:auto}
+  .nav-section{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);padding:8px 10px 6px}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm);cursor:pointer;color:var(--text2);font-size:13.5px;font-weight:500;transition:all .15s;border:none;background:none;width:100%;text-align:left;margin-bottom:2px}
+  .nav-item:hover{background:var(--surface2);color:var(--text)}
+  .nav-item.active{background:var(--accent-dim);color:var(--accent)}
+  .nav-item svg{width:16px;height:16px;flex-shrink:0;opacity:.8}
+  .nav-item.active svg{opacity:1}
+  .sidebar-footer{padding:14px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--text3);font-family:var(--mono)}
+  .db-status{display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11px}
+  .db-dot{width:7px;height:7px;border-radius:50%;background:var(--text3)}
+  .db-dot.connected{background:var(--green)}
+  .db-dot.error{background:var(--red)}
+
+  /* MAIN */
+  .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:58px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
+  .page-title{font-size:15px;font-weight:600;color:var(--text);letter-spacing:-.01em}
+  .page-sub{font-size:12px;color:var(--text2);margin-top:1px}
+  .topbar-actions{display:flex;gap:8px}
+  .content{flex:1;overflow-y:auto;padding:28px}
+
+  /* PANELS */
+  .panel{display:none}.panel.active{display:block}
+
+  /* CARDS */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;margin-bottom:16px}
+  .card-title{font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:18px}
+
+  /* FORM */
+  .form-grid{display:grid;gap:14px}
+  .form-grid-2{grid-template-columns:1fr 1fr}
+  .form-grid-3{grid-template-columns:1fr 1fr 1fr}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label{font-size:12px;font-weight:500;color:var(--text2)}
+  input[type=text],input[type=number],input[type=date],select{background:var(--bg);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:'Inter',sans-serif;font-size:13.5px;padding:9px 12px;width:100%;transition:border-color .15s;outline:none}
+  input:focus,select:focus{border-color:var(--accent)}
+  input::placeholder{color:var(--text3)}
+  select option{background:var(--surface2)}
+
+  /* BUTTONS */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;font-family:'Inter',sans-serif;cursor:pointer;border:1px solid var(--border2);background:var(--surface2);color:var(--text);transition:all .15s;white-space:nowrap}
+  .btn:hover{background:#252a3d}
+  .btn:active{transform:scale(.98)}
+  .btn svg{width:14px;height:14px}
+  .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+  .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn-primary:hover{background:#3a7df0;border-color:#3a7df0}
+  .btn-success{background:var(--green-dim);border-color:rgba(46,204,138,.3);color:var(--green)}
+  .btn-success:hover{background:rgba(46,204,138,.2)}
+  .btn-warning{background:var(--amber-dim);border-color:rgba(245,166,35,.3);color:var(--amber)}
+  .btn-warning:hover{background:rgba(245,166,35,.2)}
+  .btn-danger{background:var(--red-dim);border-color:rgba(240,80,80,.3);color:var(--red)}
+  .btn-danger:hover{background:rgba(240,80,80,.2)}
+  .btn-full{width:100%}
+  .btn-sm{padding:6px 12px;font-size:12px}
+
+  /* METRICS */
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+  .metric-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}
+  .metric-val{font-size:26px;font-weight:600;color:var(--text);font-family:var(--mono);letter-spacing:-.02em}
+  .metric-lbl{font-size:11px;color:var(--text2);margin-top:4px;text-transform:uppercase;letter-spacing:.06em}
+  .metric-card.c-accent .metric-val{color:var(--accent)}
+  .metric-card.c-green .metric-val{color:var(--green)}
+  .metric-card.c-amber .metric-val{color:var(--amber)}
+  .metric-card.c-purple .metric-val{color:var(--purple)}
+
+  /* TOAST */
+  .toast-wrap{position:fixed;top:18px;right:22px;z-index:999;display:flex;flex-direction:column;gap:8px}
+  .toast{padding:11px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;border:1px solid;display:none;animation:slideIn .2s ease;max-width:360px}
+  @keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
+  .toast.success{background:var(--green-dim);border-color:rgba(46,204,138,.3);color:var(--green);display:block}
+  .toast.error{background:var(--red-dim);border-color:rgba(240,80,80,.3);color:var(--red);display:block}
+  .toast.info{background:var(--accent-dim);border-color:rgba(79,142,247,.3);color:var(--accent);display:block}
+
+  /* LOADING OVERLAY */
+  .loading-overlay{position:fixed;inset:0;background:rgba(15,17,23,.7);z-index:888;display:flex;align-items:center;justify-content:center;display:none}
+  .loading-overlay.show{display:flex}
+  .spinner{width:36px;height:36px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* AUTOCOMPLETE */
+  .search-wrap{position:relative}
+  .suggest{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);z-index:99;max-height:200px;overflow-y:auto;display:none;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+  .suggest-item{padding:9px 12px;cursor:pointer;font-size:13px;color:var(--text);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .suggest-item:last-child{border:none}
+  .suggest-item:hover{background:var(--accent-dim)}
+  .suggest-sku{font-family:var(--mono);font-weight:500}
+  .suggest-pack{font-size:11px;color:var(--text2)}
+
+  /* SKU BADGE */
+  .sku-badge{background:var(--accent-dim);border:1px solid rgba(79,142,247,.2);border-radius:var(--radius-sm);padding:10px 14px;margin-top:8px;display:none}
+  .sku-badge-sku{font-family:var(--mono);font-weight:500;color:var(--accent);font-size:14px}
+  .sku-badge-info{font-size:12px;color:var(--text2);margin-top:3px}
+
+  /* INV SUMMARY */
+  .inv-summary{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+  .inv-box{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;text-align:center}
+  .inv-box-num{font-size:22px;font-weight:600;color:var(--text);font-family:var(--mono)}
+  .inv-box-lbl{font-size:11px;color:var(--text2);margin-top:3px;text-transform:uppercase;letter-spacing:.06em}
+  .bin-breakdown{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+  .bin-row{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px}
+  .bin-row:last-child{border:none}
+  .bin-name{font-family:var(--mono);color:var(--text);font-size:12px}
+  .bin-qty{color:var(--accent);font-weight:500;font-family:var(--mono)}
+  .inv-panel{display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+  .inv-panel-title{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+
+  /* TABLES */
+  .tbl-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text2);padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);background:var(--bg);white-space:nowrap}
+  tbody td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
+  tbody tr:last-child td{border:none}
+  tbody tr:hover td{background:var(--surface2)}
+  .mono{font-family:var(--mono);font-size:12px}
+
+  /* BADGES */
+  .badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.04em}
+  .badge-in{background:var(--green-dim);color:var(--green)}
+  .badge-out{background:var(--amber-dim);color:var(--amber)}
+  .badge-count{background:var(--accent-dim);color:var(--accent)}
+  .badge-cor{background:var(--red-dim);color:var(--red)}
+
+  /* FILTER */
+  .filter-row{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+  .filter-row input,.filter-row select{flex:1;min-width:120px}
+  .filter-row .btn{flex-shrink:0}
+  .manual-pack-wrap{display:none;margin-top:10px}
+  .divider{height:1px;background:var(--border);margin:18px 0}
+  .empty{text-align:center;padding:40px 20px;color:var(--text3);font-size:13px}
+  .log-meta{font-size:11px;color:var(--text3);margin-top:10px;font-family:var(--mono)}
+
+  /* SKU MASTER */
+  .sku-master-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .pack-tag{display:inline-flex;align-items:center;gap:4px;background:var(--accent-dim);border:1px solid rgba(79,142,247,.2);border-radius:20px;padding:3px 10px;font-size:12px;color:var(--accent);font-family:var(--mono);margin:2px}
+  .pack-tag button{background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;line-height:1;padding:0 0 0 2px;opacity:.7}
+  .pack-tag button:hover{opacity:1}
+  .pack-tags-wrap{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;min-height:32px}
+  .sku-row-actions{display:flex;gap:6px}
+  .search-bar{display:flex;gap:10px;margin-bottom:16px}
+  .search-bar input{flex:1}
+
+  ::-webkit-scrollbar{width:6px;height:6px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+  @media(max-width:768px){
+    .sidebar{width:60px;min-width:60px}
+    .logo-name,.nav-item span,.nav-section,.sidebar-footer .db-label{display:none}
+    .nav-item{justify-content:center;padding:12px}
+    .content{padding:16px}
+    .metrics{grid-template-columns:1fr 1fr}
+    .form-grid-2,.form-grid-3{grid-template-columns:1fr}
+    .topbar{padding:0 16px}
+    .sku-master-grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<div class="toast-wrap"><div class="toast" id="global-toast"></div></div>
+<div class="loading-overlay" id="loading"><div class="spinner"></div></div>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">WMS</div>
+      <div class="logo-name">Inventory</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section">Operations</div>
+      <button class="nav-item active" onclick="switchTab('putaway')" id="nav-putaway">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg><span>Put Away</span>
+      </button>
+      <button class="nav-item" onclick="switchTab('picking')" id="nav-picking">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg><span>Picking</span>
+      </button>
+      <button class="nav-item" onclick="switchTab('cycle')" id="nav-cycle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12a8 8 0 018-8"/><path d="M20 12a8 8 0 01-8 8"/><path d="M4 12l2-2m-2 2l-2-2"/><path d="M20 12l-2 2m2-2l2 2"/></svg><span>Cycle Count</span>
+      </button>
+      <button class="nav-item" onclick="switchTab('correct')" id="nav-correct">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg><span>Correction</span>
+      </button>
+      <div class="nav-section" style="margin-top:8px">Reports</div>
+      <button class="nav-item" onclick="switchTab('stock')" id="nav-stock">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span>Stock View</span>
+      </button>
+      <button class="nav-item" onclick="switchTab('log')" id="nav-log">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><span>Movement Log</span>
+      </button>
+      <div class="nav-section" style="margin-top:8px">Master</div>
+      <button class="nav-item" onclick="switchTab('skumaster')" id="nav-skumaster">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h8M4 18h8"/><circle cx="18" cy="16" r="3"/><path d="M18 13v3l2 1"/></svg><span>SKU Master</span>
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="db-status">
+        <div class="db-dot" id="db-dot"></div>
+        <span class="db-label" id="db-label">Connecting...</span>
+      </div>
+      <div style="color:var(--text3);margin-top:2px" id="sku-count-label">—</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="page-title" id="page-title">Put Away</div>
+        <div class="page-sub" id="page-sub">Add stock to bin location</div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-sm" onclick="exportCSV()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export Stock
+        </button>
+        <button class="btn btn-sm btn-primary" onclick="exportLogCSV()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export Log
+        </button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- PUT AWAY -->
+      <div class="panel active" id="panel-putaway">
+        <div class="card">
+          <div class="card-title">Put Away</div>
+          <div class="form-grid form-grid-2">
+            <div class="field">
+              <label>Search SKU</label>
+              <div class="search-wrap">
+                <input type="text" id="pa-sku" placeholder="Type or scan SKU..." autocomplete="off" oninput="suggest('pa')" onkeydown="suggestKey(event,'pa')" />
+                <div class="suggest" id="pa-suggest"></div>
+              </div>
+              <div class="sku-badge" id="pa-found"><div class="sku-badge-sku" id="pa-found-sku"></div><div class="sku-badge-info" id="pa-found-info"></div></div>
+            </div>
+            <div class="field">
+              <label>Pack</label>
+              <select id="pa-pack" onchange="checkManualPa()"><option value="">— select SKU first —</option></select>
+              <div class="manual-pack-wrap" id="pa-manual-wrap"><input type="number" id="pa-manual-pack" placeholder="Enter pack value" min="1" /></div>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div class="form-grid form-grid-2">
+            <div class="field"><label>Scan / Enter Bin</label><input type="text" id="pa-bin" placeholder="e.g. A-01-01" /></div>
+            <div class="field"><label>Quantity</label><input type="number" id="pa-qty" placeholder="0" min="1" /></div>
+          </div>
+          <div style="margin-top:16px">
+            <button class="btn btn-success btn-full" onclick="doPutAway()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Confirm Put Away
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PICKING -->
+      <div class="panel" id="panel-picking">
+        <div class="card">
+          <div class="card-title">Picking</div>
+          <div class="form-grid form-grid-2">
+            <div class="field">
+              <label>Search SKU</label>
+              <div class="search-wrap">
+                <input type="text" id="pk-sku" placeholder="Type or scan SKU..." autocomplete="off" oninput="suggest('pk')" onkeydown="suggestKey(event,'pk')" />
+                <div class="suggest" id="pk-suggest"></div>
+              </div>
+              <div class="sku-badge" id="pk-found"><div class="sku-badge-sku" id="pk-found-sku"></div><div class="sku-badge-info" id="pk-found-info"></div></div>
+            </div>
+            <div class="field">
+              <label>Pack</label>
+              <select id="pk-pack" onchange="checkManualPk()"><option value="">— select SKU first —</option></select>
+              <div class="manual-pack-wrap" id="pk-manual-wrap"><input type="number" id="pk-manual-pack" placeholder="Enter pack value" min="1" /></div>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div class="form-grid form-grid-2">
+            <div class="field"><label>Scan / Enter Bin</label><input type="text" id="pk-bin" placeholder="e.g. A-01-01" /></div>
+            <div class="field"><label>Quantity to Pick</label><input type="number" id="pk-qty" placeholder="0" min="1" /></div>
+          </div>
+          <div style="margin-top:16px">
+            <button class="btn btn-warning btn-full" onclick="doPicking()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Confirm Pick
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CYCLE COUNT -->
+      <div class="panel" id="panel-cycle">
+        <div class="card">
+          <div class="card-title">Cycle Count</div>
+          <div class="form-grid form-grid-2">
+            <div class="field">
+              <label>Search SKU</label>
+              <div class="search-wrap">
+                <input type="text" id="cc-sku" placeholder="Type or scan SKU..." autocomplete="off" oninput="suggest('cc')" onkeydown="suggestKey(event,'cc')" />
+                <div class="suggest" id="cc-suggest"></div>
+              </div>
+              <div class="sku-badge" id="cc-found"><div class="sku-badge-sku" id="cc-found-sku"></div><div class="sku-badge-info" id="cc-found-info"></div></div>
+            </div>
+            <div class="field">
+              <label>Pack</label>
+              <select id="cc-pack" onchange="onCcPackChange()"><option value="">— select SKU first —</option></select>
+              <div class="manual-pack-wrap" id="cc-manual-wrap"><input type="number" id="cc-manual-pack" placeholder="Enter pack value" min="1" /></div>
+            </div>
+          </div>
+          <div class="inv-panel" id="cc-inv-panel">
+            <div class="inv-panel-title">Current inventory — this SKU &amp; Pack</div>
+            <div class="inv-summary">
+              <div class="inv-box"><div class="inv-box-num" id="cc-total-qty">0</div><div class="inv-box-lbl">Total units</div></div>
+              <div class="inv-box"><div class="inv-box-num" id="cc-total-bins">0</div><div class="inv-box-lbl">Bins</div></div>
+            </div>
+            <div class="bin-breakdown" id="cc-bin-breakdown"></div>
+          </div>
+          <div class="divider"></div>
+          <div class="form-grid form-grid-2">
+            <div class="field"><label>Scan / Enter Bin</label><input type="text" id="cc-bin" placeholder="e.g. A-01-01" /></div>
+            <div class="field"><label>Physically counted qty</label><input type="number" id="cc-qty" placeholder="0" min="0" /></div>
+          </div>
+          <div style="margin-top:16px">
+            <button class="btn btn-primary btn-full" onclick="doCycleCount()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Save Count
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CORRECTION -->
+      <div class="panel" id="panel-correct">
+        <div class="card">
+          <div class="card-title">Manual Correction</div>
+          <div class="form-grid form-grid-2">
+            <div class="field">
+              <label>Search SKU</label>
+              <div class="search-wrap">
+                <input type="text" id="cor-sku" placeholder="Type SKU..." autocomplete="off" oninput="suggest('cor')" onkeydown="suggestKey(event,'cor')" />
+                <div class="suggest" id="cor-suggest"></div>
+              </div>
+              <div class="sku-badge" id="cor-found"><div class="sku-badge-sku" id="cor-found-sku"></div><div class="sku-badge-info" id="cor-found-info"></div></div>
+            </div>
+            <div class="field"><label>Pack</label><select id="cor-pack"><option value="">— select SKU first —</option></select></div>
+          </div>
+          <div class="divider"></div>
+          <div class="form-grid form-grid-3">
+            <div class="field"><label>Bin</label><input type="text" id="cor-bin" placeholder="Bin location" /></div>
+            <div class="field"><label>Correction type</label>
+              <select id="cor-type">
+                <option value="set">Set exact qty</option>
+                <option value="add">Add qty (+)</option>
+                <option value="sub">Remove qty (−)</option>
+              </select>
+            </div>
+            <div class="field"><label>Quantity</label><input type="number" id="cor-qty" placeholder="0" min="0" /></div>
+          </div>
+          <div class="field" style="margin-top:12px"><label>Reason</label><input type="text" id="cor-reason" placeholder="e.g. damaged, miscounted, system error..." /></div>
+          <div style="margin-top:16px">
+            <button class="btn btn-danger btn-full" onclick="doCorrection()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Apply Correction
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STOCK VIEW -->
+      <div class="panel" id="panel-stock">
+        <div class="metrics">
+          <div class="metric-card c-accent"><div class="metric-val" id="m-skus">—</div><div class="metric-lbl">Total SKUs</div></div>
+          <div class="metric-card c-green"><div class="metric-val" id="m-units">—</div><div class="metric-lbl">Total units</div></div>
+          <div class="metric-card c-amber"><div class="metric-val" id="m-bins">—</div><div class="metric-lbl">Bins used</div></div>
+          <div class="metric-card c-purple"><div class="metric-val" id="m-moves">—</div><div class="metric-lbl">Movements</div></div>
+        </div>
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <div class="card-title" style="margin-bottom:0">Stock Levels</div>
+            <button class="btn btn-sm" onclick="exportCSV()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV
+            </button>
+          </div>
+          <div class="filter-row">
+            <input type="text" placeholder="Filter SKU..." id="f-sku" oninput="renderStock()" />
+            <input type="text" placeholder="Filter bin..." id="f-bin" oninput="renderStock()" />
+          </div>
+          <div class="tbl-wrap">
+            <table><thead><tr><th>SKU</th><th>Pack</th><th>Bin</th><th>Qty</th></tr></thead><tbody id="stock-body"></tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- MOVEMENT LOG -->
+      <div class="panel" id="panel-log">
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+            <div class="card-title" style="margin-bottom:0">Movement Log</div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-sm" onclick="clearLogFilter()">Clear filter</button>
+              <button class="btn btn-sm btn-primary" onclick="exportLogCSV()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV
+              </button>
+            </div>
+          </div>
+          <div class="filter-row">
+            <input type="text" placeholder="Filter SKU..." id="lf-sku" oninput="renderLog()" />
+            <select id="lf-type" onchange="renderLog()">
+              <option value="">All types</option>
+              <option value="IN">Put Away</option>
+              <option value="OUT">Pick</option>
+              <option value="COUNT">Cycle Count</option>
+              <option value="COR">Correction</option>
+            </select>
+            <input type="date" id="lf-date" onchange="renderLog()" />
+          </div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>Date</th><th>Time</th><th>Type</th><th>SKU</th><th>Pack</th><th>Bin</th><th>Qty</th><th>Note</th></tr></thead>
+              <tbody id="log-body"></tbody>
+            </table>
+          </div>
+          <div class="log-meta" id="log-count"></div>
+        </div>
+      </div>
+
+      <!-- SKU MASTER -->
+      <div class="panel" id="panel-skumaster">
+        <div class="sku-master-grid">
+          <!-- ADD NEW SKU -->
+          <div class="card">
+            <div class="card-title">Add New SKU</div>
+            <div class="field"><label>SKU Code</label><input type="text" id="sm-sku" placeholder="e.g. AB99" style="text-transform:uppercase" /></div>
+            <div class="field" style="margin-top:12px">
+              <label>Pack values (add one at a time)</label>
+              <div style="display:flex;gap:8px">
+                <input type="number" id="sm-pack-input" placeholder="e.g. 101" min="1" style="flex:1" onkeydown="if(event.key==='Enter')addPackTag()" />
+                <button class="btn btn-sm btn-primary" onclick="addPackTag()">+ Add</button>
+              </div>
+              <div class="pack-tags-wrap" id="sm-pack-tags"></div>
+            </div>
+            <div style="margin-top:16px;display:flex;gap:8px">
+              <button class="btn btn-success btn-full" onclick="saveSKU()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Save SKU
+              </button>
+            </div>
+          </div>
+
+          <!-- EDIT SKU -->
+          <div class="card" id="edit-sku-card" style="display:none">
+            <div class="card-title">Edit SKU</div>
+            <div class="field"><label>SKU Code</label><input type="text" id="edit-sku-code" readonly style="opacity:.6" /></div>
+            <div class="field" style="margin-top:12px">
+              <label>Pack values</label>
+              <div style="display:flex;gap:8px">
+                <input type="number" id="edit-pack-input" placeholder="Add pack" min="1" style="flex:1" onkeydown="if(event.key==='Enter')addEditPackTag()" />
+                <button class="btn btn-sm btn-primary" onclick="addEditPackTag()">+ Add</button>
+              </div>
+              <div class="pack-tags-wrap" id="edit-pack-tags"></div>
+            </div>
+            <div style="margin-top:16px;display:flex;gap:8px">
+              <button class="btn btn-primary" style="flex:1" onclick="updateSKU()">Update SKU</button>
+              <button class="btn" onclick="cancelEdit()">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- SKU LIST -->
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <div class="card-title" style="margin-bottom:0">All SKUs</div>
+            <span style="font-size:12px;color:var(--text2)" id="sm-count"></span>
+          </div>
+          <div class="search-bar">
+            <input type="text" placeholder="Search SKU..." id="sm-search" oninput="renderSKUMaster()" />
+          </div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>SKU</th><th>Packs</th><th>Actions</th></tr></thead>
+              <tbody id="sm-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+var SUPA_URL = 'https://pisuytyvpkjkjnxlgfvk.supabase.co';
+var SUPA_KEY = 'sb_publishable_ZipqqY1kXtdwpwQj8dsGbQ_NU9A_Rt9';
+
+var skuMap = {};
+var inventoryCache = [];
+var logsCache = [];
+var newPackTags = [];
+var editPackTags = [];
+var editingSkuId = null;
+
+var PAGE_META = {
+  putaway:   {title:'Put Away',      sub:'Add stock to bin location'},
+  picking:   {title:'Picking',       sub:'Remove stock from bin location'},
+  cycle:     {title:'Cycle Count',   sub:'Physical count — search SKU & enter qty'},
+  correct:   {title:'Correction',    sub:'Manual inventory adjustment with reason'},
+  stock:     {title:'Stock View',    sub:'Live stock levels across all bins'},
+  log:       {title:'Movement Log',  sub:'Full date & time history of all movements'},
+  skumaster: {title:'SKU Master',    sub:'Add, edit and delete SKUs and pack values'},
+};
+
+/* ── API helpers ── */
+function headers() {
+  return {'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY};
+}
+async function sbGet(table, params) {
+  var url = SUPA_URL+'/rest/v1/'+table+'?'+params+'&apikey='+SUPA_KEY;
+  var r = await fetch(url,{headers:headers()});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbPost(table, body) {
+  var r = await fetch(SUPA_URL+'/rest/v1/'+table,{method:'POST',headers:{...headers(),'Prefer':'return=representation'},body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbPatch(table, match, body) {
+  var r = await fetch(SUPA_URL+'/rest/v1/'+table+'?'+match+'&apikey='+SUPA_KEY,{method:'PATCH',headers:{...headers(),'Prefer':'return=representation'},body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbDelete(table, match) {
+  var r = await fetch(SUPA_URL+'/rest/v1/'+table+'?'+match+'&apikey='+SUPA_KEY,{method:'DELETE',headers:headers()});
+  if(!r.ok) throw new Error(await r.text());
+  return true;
+}
+async function sbUpsert(table, body, onConflict) {
+  var r = await fetch(SUPA_URL+'/rest/v1/'+table+'?on_conflict='+onConflict+'&apikey='+SUPA_KEY,{method:'POST',headers:{...headers(),'Prefer':'resolution=merge-duplicates,return=representation'},body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+/* ── INIT ── */
+async function init() {
+  setLoading(true);
+  try {
+    await loadSKUs();
+    setDbStatus(true);
+    showToast('Connected to database', 'success');
+  } catch(e) {
+    setDbStatus(false);
+    showToast('DB connection failed: '+e.message, 'error');
+  }
+  setLoading(false);
+}
+
+function setDbStatus(ok) {
+  document.getElementById('db-dot').className = 'db-dot '+(ok?'connected':'error');
+  document.getElementById('db-label').textContent = ok ? 'Connected' : 'Offline';
+}
+
+async function loadSKUs() {
+  var rows = await sbGet('sku_master','select=sku,pack&order=sku.asc');
+  skuMap = {};
+  rows.forEach(function(r) {
+    if(!skuMap[r.sku]) skuMap[r.sku]=[];
+    if(skuMap[r.sku].indexOf(r.pack)===-1) skuMap[r.sku].push(r.pack);
+  });
+  var cnt = Object.keys(skuMap).length;
+  document.getElementById('sku-count-label').textContent = cnt+' SKUs';
+}
+
+/* ── UI helpers ── */
+function setLoading(v) { document.getElementById('loading').className = 'loading-overlay'+(v?' show':''); }
+
+function showToast(msg, type) {
+  var el = document.getElementById('global-toast');
+  el.textContent = msg; el.className = 'toast '+type;
+  clearTimeout(el._t);
+  el._t = setTimeout(function(){el.className='toast';}, 3200);
+}
+
+function fmtDT(dt) {
+  var d=dt.getDate().toString().padStart(2,'0');
+  var mo=(dt.getMonth()+1).toString().padStart(2,'0');
+  var y=dt.getFullYear();
+  var h=dt.getHours().toString().padStart(2,'0');
+  var mi=dt.getMinutes().toString().padStart(2,'0');
+  var s=dt.getSeconds().toString().padStart(2,'0');
+  return {date:d+'/'+mo+'/'+y, time:h+':'+mi+':'+s, iso:y+'-'+mo+'-'+d};
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
+  document.getElementById('nav-'+tab).classList.add('active');
+  document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
+  document.getElementById('panel-'+tab).classList.add('active');
+  var m = PAGE_META[tab];
+  document.getElementById('page-title').textContent = m.title;
+  document.getElementById('page-sub').textContent = m.sub;
+  if(tab==='stock') loadAndRenderStock();
+  if(tab==='log') loadAndRenderLog();
+  if(tab==='skumaster') renderSKUMaster();
+}
+
+/* ── AUTOCOMPLETE ── */
+function suggest(prefix) {
+  var val = document.getElementById(prefix+'-sku').value.trim().toUpperCase();
+  var box = document.getElementById(prefix+'-suggest');
+  if(!val){box.style.display='none';return;}
+  var matches = Object.keys(skuMap).filter(function(s){return s.indexOf(val)!==-1;}).sort().slice(0,14);
+  if(!matches.length){box.style.display='none';return;}
+  box.innerHTML = matches.map(function(s){
+    return '<div class="suggest-item" onmousedown="selectSKU(\''+prefix+'\',\''+s+'\')"><span class="suggest-sku">'+s+'</span><span class="suggest-pack">Pack: '+skuMap[s].join(', ')+'</span></div>';
+  }).join('');
+  box.style.display='block';
+}
+
+function suggestKey(e,prefix) {
+  if(e.key==='Enter'){var v=document.getElementById(prefix+'-sku').value.trim().toUpperCase();if(skuMap[v])selectSKU(prefix,v);document.getElementById(prefix+'-suggest').style.display='none';}
+  if(e.key==='Escape') document.getElementById(prefix+'-suggest').style.display='none';
+}
+
+function selectSKU(prefix, sku) {
+  document.getElementById(prefix+'-sku').value=sku;
+  document.getElementById(prefix+'-suggest').style.display='none';
+  var packs=skuMap[sku]||[];
+  var sel=document.getElementById(prefix+'-pack');
+  sel.innerHTML=packs.map(function(p){return '<option value="'+p+'">'+p+'</option>';}).join('')+'<option value="manual">Manual...</option>';
+  var inv=inventoryCache.filter(function(r){return r.sku===sku;});
+  var qty=inv.reduce(function(a,b){return a+b.qty;},0);
+  document.getElementById(prefix+'-found-sku').textContent=sku+' · Packs: '+packs.join(', ');
+  document.getElementById(prefix+'-found-info').textContent='Current stock: '+qty+' units across '+inv.length+' bin(s)';
+  document.getElementById(prefix+'-found').style.display='block';
+  var mw=document.getElementById(prefix+'-manual-wrap');
+  if(mw)mw.style.display='none';
+  if(prefix==='cc') updateCcPanel(sku,parseInt(packs[0]));
+}
+
+function checkManual(prefix) {
+  var sel=document.getElementById(prefix+'-pack');
+  var mw=document.getElementById(prefix+'-manual-wrap');
+  if(mw) mw.style.display=sel.value==='manual'?'block':'none';
+}
+function checkManualPa(){checkManual('pa');}
+function checkManualPk(){checkManual('pk');}
+
+function onCcPackChange() {
+  checkManual('cc');
+  var sku=document.getElementById('cc-sku').value.trim().toUpperCase();
+  var sel=document.getElementById('cc-pack');
+  if(sel.value!=='manual'&&sku&&skuMap[sku]) updateCcPanel(sku,parseInt(sel.value));
+  else document.getElementById('cc-inv-panel').style.display='none';
+}
+
+function updateCcPanel(sku, pack) {
+  var rows=inventoryCache.filter(function(r){return r.sku===sku&&r.pack===pack;});
+  var total=rows.reduce(function(a,b){return a+b.qty;},0);
+  document.getElementById('cc-total-qty').textContent=total;
+  document.getElementById('cc-total-bins').textContent=rows.length;
+  document.getElementById('cc-bin-breakdown').innerHTML=rows.length===0
+    ?'<div class="bin-row" style="color:var(--text3)">No stock recorded yet</div>'
+    :rows.map(function(r){return '<div class="bin-row"><span class="bin-name">'+r.bin+'</span><span class="bin-qty">'+r.qty+'</span></div>';}).join('');
+  document.getElementById('cc-inv-panel').style.display='block';
+}
+
+function getPack(prefix) {
+  var sel=document.getElementById(prefix+'-pack');
+  if(sel.value==='manual'){var mv=document.getElementById(prefix+'-manual-pack');return parseInt(mv?mv.value:0)||null;}
+  return parseInt(sel.value)||null;
+}
+
+function resetForm(prefix) {
+  ['sku','bin','qty'].forEach(function(f){var el=document.getElementById(prefix+'-'+f);if(el)el.value='';});
+  document.getElementById(prefix+'-found').style.display='none';
+  document.getElementById(prefix+'-pack').innerHTML='<option value="">— select SKU first —</option>';
+  var mw=document.getElementById(prefix+'-manual-wrap');
+  if(mw)mw.style.display='none';
+}
+
+/* ── OPERATIONS ── */
+async function doPutAway() {
+  var sku=document.getElementById('pa-sku').value.trim().toUpperCase();
+  var pack=getPack('pa');
+  var bin=document.getElementById('pa-bin').value.trim().toUpperCase();
+  var qty=parseInt(document.getElementById('pa-qty').value);
+  if(!sku||!skuMap[sku]){showToast('SKU not found','error');return;}
+  if(!pack){showToast('Select a pack','error');return;}
+  if(!bin){showToast('Enter bin location','error');return;}
+  if(!qty||qty<1){showToast('Enter valid quantity','error');return;}
+  setLoading(true);
+  try {
+    var existing=inventoryCache.find(function(r){return r.sku===sku&&r.pack===pack&&r.bin===bin;});
+    var newQty = existing ? existing.qty+qty : qty;
+    await sbUpsert('inventory',{sku:sku,pack:pack,bin:bin,qty:newQty,updated_at:new Date().toISOString()},'sku,pack,bin');
+    await sbPost('movements',{type:'IN',sku:sku,pack:pack,bin:bin,qty:qty,note:'Put away'});
+    if(existing) existing.qty=newQty; else inventoryCache.push({sku:sku,pack:pack,bin:bin,qty:newQty});
+    showToast('✓ Put away '+qty+' × '+sku+' (Pack '+pack+') → '+bin,'success');
+    resetForm('pa');
+  } catch(e){showToast('Error: '+e.message,'error');}
+  setLoading(false);
+}
+
+async function doPicking() {
+  var sku=document.getElementById('pk-sku').value.trim().toUpperCase();
+  var pack=getPack('pk');
+  var bin=document.getElementById('pk-bin').value.trim().toUpperCase();
+  var qty=parseInt(document.getElementById('pk-qty').value);
+  if(!sku||!skuMap[sku]){showToast('SKU not found','error');return;}
+  if(!pack){showToast('Select a pack','error');return;}
+  if(!bin){showToast('Enter bin location','error');return;}
+  if(!qty||qty<1){showToast('Enter valid quantity','error');return;}
+  var existing=inventoryCache.find(function(r){return r.sku===sku&&r.pack===pack&&r.bin===bin;});
+  if(!existing||existing.qty<qty){showToast('Insufficient stock ('+(existing?existing.qty:0)+' available)','error');return;}
+  setLoading(true);
+  try {
+    var newQty=existing.qty-qty;
+    if(newQty===0) {
+      await sbDelete('inventory','sku=eq.'+sku+'&pack=eq.'+pack+'&bin=eq.'+bin);
+      inventoryCache=inventoryCache.filter(function(r){return!(r.sku===sku&&r.pack===pack&&r.bin===bin);});
+    } else {
+      await sbUpsert('inventory',{sku:sku,pack:pack,bin:bin,qty:newQty,updated_at:new Date().toISOString()},'sku,pack,bin');
+      existing.qty=newQty;
+    }
+    await sbPost('movements',{type:'OUT',sku:sku,pack:pack,bin:bin,qty:qty,note:'Picked'});
+    showToast('✓ Picked '+qty+' × '+sku+' from '+bin,'success');
+    resetForm('pk');
+  } catch(e){showToast('Error: '+e.message,'error');}
+  setLoading(false);
+}
+
+async function doCycleCount() {
+  var sku=document.getElementById('cc-sku').value.trim().toUpperCase();
+  var pack=getPack('cc');
+  var bin=document.getElementById('cc-bin').value.trim().toUpperCase();
+  var qty=parseInt(document.getElementById('cc-qty').value);
+  if(!sku){showToast('Enter SKU','error');return;}
+  if(!pack){showToast('Select pack','error');return;}
+  if(!bin){showToast('Enter bin','error');return;}
+  if(isNaN(qty)||qty<0){showToast('Enter valid qty','error');return;}
+  var existing=inventoryCache.find(function(r){return r.sku===sku&&r.pack===pack&&r.bin===bin;});
+  var old=existing?existing.qty:0;
+  var diff=qty-old;
+  var diffStr=diff===0?'no variance':(diff>0?'+':'')+diff;
+  setLoading(true);
+  try {
+    await sbUpsert('inventory',{sku:sku,pack:pack,bin:bin,qty:qty,updated_at:new Date().toISOString()},'sku,pack,bin');
+    await sbPost('movements',{type:'COUNT',sku:sku,pack:pack,bin:bin,qty:qty,note:'Cycle count. Variance: '+diffStr});
+    if(existing) existing.qty=qty; else inventoryCache.push({sku:sku,pack:pack,bin:bin,qty:qty});
+    showToast('✓ Count saved. Was: '+old+' → Now: '+qty+' ('+diffStr+')','success');
+    updateCcPanel(sku,pack);
+    document.getElementById('cc-bin').value='';
+    document.getElementById('cc-qty').value='';
+  } catch(e){showToast('Error: '+e.message,'error');}
+  setLoading(false);
+}
+
+async function doCorrection() {
+  var sku=document.getElementById('cor-sku').value.trim().toUpperCase();
+  var pack=parseInt(document.getElementById('cor-pack').value)||0;
+  var bin=document.getElementById('cor-bin').value.trim().toUpperCase();
+  var type=document.getElementById('cor-type').value;
+  var qty=parseInt(document.getElementById('cor-qty').value);
+  var reason=document.getElementById('cor-reason').value.trim()||'Manual correction';
+  if(!sku){showToast('Enter SKU','error');return;}
+  if(!bin){showToast('Enter bin','error');return;}
+  if(isNaN(qty)||qty<0){showToast('Enter valid qty','error');return;}
+  var existing=inventoryCache.find(function(r){return r.sku===sku&&r.pack===pack&&r.bin===bin;});
+  var old=existing?existing.qty:0;
+  var newQty;
+  if(type==='set') newQty=qty;
+  else if(type==='add') newQty=old+qty;
+  else { if(!existing||qty>old){showToast('Cannot remove more than available ('+old+')','error');return;} newQty=old-qty; }
+  setLoading(true);
+  try {
+    if(newQty===0&&existing) {
+      await sbDelete('inventory','sku=eq.'+sku+'&pack=eq.'+pack+'&bin=eq.'+bin);
+      inventoryCache=inventoryCache.filter(function(r){return!(r.sku===sku&&r.pack===pack&&r.bin===bin);});
+    } else {
+      await sbUpsert('inventory',{sku:sku,pack:pack,bin:bin,qty:newQty,updated_at:new Date().toISOString()},'sku,pack,bin');
+      if(existing) existing.qty=newQty; else inventoryCache.push({sku:sku,pack:pack,bin:bin,qty:newQty});
+    }
+    await sbPost('movements',{type:'COR',sku:sku,pack:pack,bin:bin,qty:qty,note:reason+' | '+old+' → '+newQty});
+    showToast('✓ Correction applied: '+old+' → '+newQty,'success');
+    resetForm('cor');
+    document.getElementById('cor-bin').value='';
+    document.getElementById('cor-qty').value='';
+    document.getElementById('cor-reason').value='';
+  } catch(e){showToast('Error: '+e.message,'error');}
+  setLoading(false);
+}
+
+/* ── STOCK VIEW ── */
+async function loadAndRenderStock() {
+  setLoading(true);
+  try {
+    inventoryCache = await sbGet('inventory','select=sku,pack,bin,qty&order=sku.asc');
+    var logCount = await sbGet('movements','select=id&limit=1&order=id.desc');
+    renderStock();
+  } catch(e){showToast('Failed to load stock: '+e.message,'error');}
+  setLoading(false);
+}
+
+function renderStock() {
+  var fsku=(document.getElementById('f-sku').value||'').toUpperCase();
+  var fbin=(document.getElementById('f-bin').value||'').toUpperCase();
+  var rows=inventoryCache.filter(function(r){return r.sku.indexOf(fsku)!==-1&&r.bin.indexOf(fbin)!==-1;});
+  document.getElementById('m-skus').textContent=new Set(inventoryCache.map(function(r){return r.sku;})).size;
+  document.getElementById('m-units').textContent=inventoryCache.reduce(function(a,b){return a+b.qty;},0);
+  document.getElementById('m-bins').textContent=new Set(inventoryCache.map(function(r){return r.bin;})).size;
+  document.getElementById('m-moves').textContent='—';
+  document.getElementById('stock-body').innerHTML=!rows.length
+    ?'<tr><td colspan="4"><div class="empty">No stock recorded yet</div></td></tr>'
+    :rows.map(function(r){return '<tr><td class="mono">'+r.sku+'</td><td>'+r.pack+'</td><td class="mono">'+r.bin+'</td><td><strong>'+r.qty+'</strong></td></tr>';}).join('');
+}
+
+/* ── MOVEMENT LOG ── */
+async function loadAndRenderLog() {
+  setLoading(true);
+  try {
+    logsCache = await sbGet('movements','select=*&order=created_at.desc&limit=500');
+    renderLog();
+  } catch(e){showToast('Failed to load log: '+e.message,'error');}
+  setLoading(false);
+}
+
+function renderLog() {
+  var fsku=(document.getElementById('lf-sku').value||'').toUpperCase();
+  var ftype=document.getElementById('lf-type').value;
+  var fdate=document.getElementById('lf-date').value;
+  var bmap={IN:'badge-in',OUT:'badge-out',COUNT:'badge-count',COR:'badge-cor'};
+  var lmap={IN:'Put Away',OUT:'Pick',COUNT:'Cycle Count',COR:'Correction'};
+  var filtered=logsCache.filter(function(l){
+    if(fsku&&(l.sku||'').toUpperCase().indexOf(fsku)===-1)return false;
+    if(ftype&&l.type!==ftype)return false;
+    if(fdate&&!l.created_at.startsWith(fdate))return false;
+    return true;
+  });
+  document.getElementById('log-count').textContent='Showing '+filtered.length+' of '+logsCache.length+' movements';
+  document.getElementById('log-body').innerHTML=!filtered.length
+    ?'<tr><td colspan="8"><div class="empty">No movements match filter</div></td></tr>'
+    :filtered.map(function(l){
+      var dt=new Date(l.created_at);
+      var fmt=fmtDT(dt);
+      return '<tr>'
+        +'<td class="mono" style="font-size:12px">'+fmt.date+'</td>'
+        +'<td class="mono" style="font-size:12px;color:var(--text2)">'+fmt.time+'</td>'
+        +'<td><span class="badge '+bmap[l.type]+'">'+lmap[l.type]+'</span></td>'
+        +'<td class="mono"><strong>'+(l.sku||'')+'</strong></td>'
+        +'<td>'+(l.pack||'')+'</td>'
+        +'<td class="mono">'+(l.bin||'')+'</td>'
+        +'<td><strong>'+(l.qty||0)+'</strong></td>'
+        +'<td style="font-size:12px;color:var(--text2)">'+(l.note||'')+'</td>'
+        +'</tr>';
+    }).join('');
+}
+
+function clearLogFilter() {
+  document.getElementById('lf-sku').value='';
+  document.getElementById('lf-type').value='';
+  document.getElementById('lf-date').value='';
+  renderLog();
+}
+
+/* ── SKU MASTER ── */
+function addPackTag() {
+  var v=parseInt(document.getElementById('sm-pack-input').value);
+  if(!v||v<1){showToast('Enter valid pack value','error');return;}
+  if(newPackTags.indexOf(v)!==-1){showToast('Pack already added','error');return;}
+  newPackTags.push(v);
+  renderPackTags('sm-pack-tags',newPackTags,'removePackTag');
+  document.getElementById('sm-pack-input').value='';
+}
+
+function removePackTag(v) {
+  newPackTags=newPackTags.filter(function(p){return p!==v;});
+  renderPackTags('sm-pack-tags',newPackTags,'removePackTag');
+}
+
+function addEditPackTag() {
+  var v=parseInt(document.getElementById('edit-pack-input').value);
+  if(!v||v<1){showToast('Enter valid pack value','error');return;}
+  if(editPackTags.indexOf(v)!==-1){showToast('Pack already added','error');return;}
+  editPackTags.push(v);
+  renderPackTags('edit-pack-tags',editPackTags,'removeEditPackTag');
+  document.getElementById('edit-pack-input').value='';
+}
+
+function removeEditPackTag(v) {
+  editPackTags=editPackTags.filter(function(p){return p!==v;});
+  renderPackTags('edit-pack-tags',editPackTags,'removeEditPackTag');
+}
+
+function renderPackTags(containerId, tags, removeFn) {
+  var el=document.getElementById(containerId);
+  el.innerHTML=!tags.length
+    ?'<span style="font-size:12px;color:var(--text3)">No packs added yet</span>'
+    :tags.map(function(p){return '<span class="pack-tag">'+p+'<button onclick="'+removeFn+'('+p+')">×</button></span>';}).join('');
+}
+
+async function saveSKU() {
+  var sku=document.getElementById('sm-sku').value.trim().toUpperCase();
+  if(!sku){showToast('Enter SKU code','error');return;}
+  if(!newPackTags.length){showToast('Add at least one pack value','error');return;}
+  setLoading(true);
+  try {
+    var rows=newPackTags.map(function(p){return {sku:sku,pack:p};});
+    await sbPost('sku_master',rows);
+    await loadSKUs();
+    renderSKUMaster();
+    newPackTags=[];
+    renderPackTags('sm-pack-tags',[],'removePackTag');
+    document.getElementById('sm-sku').value='';
+    showToast('✓ SKU '+sku+' saved with '+rows.length+' pack(s)','success');
+  } catch(e){showToast('Error saving SKU: '+e.message,'error');}
+  setLoading(false);
+}
+
+function editSKU(sku) {
+  editingSkuId=sku;
+  editPackTags=[...(skuMap[sku]||[])];
+  document.getElementById('edit-sku-code').value=sku;
+  renderPackTags('edit-pack-tags',editPackTags,'removeEditPackTag');
+  document.getElementById('edit-sku-card').style.display='block';
+  document.getElementById('edit-sku-card').scrollIntoView({behavior:'smooth'});
+}
+
+function cancelEdit() {
+  editingSkuId=null;
+  editPackTags=[];
+  document.getElementById('edit-sku-card').style.display='none';
+}
+
+async function updateSKU() {
+  if(!editingSkuId)return;
+  if(!editPackTags.length){showToast('Add at least one pack value','error');return;}
+  setLoading(true);
+  try {
+    await sbDelete('sku_master','sku=eq.'+editingSkuId);
+    var rows=editPackTags.map(function(p){return {sku:editingSkuId,pack:p};});
+    await sbPost('sku_master',rows);
+    await loadSKUs();
+    renderSKUMaster();
+    cancelEdit();
+    showToast('✓ SKU '+editingSkuId+' updated','success');
+  } catch(e){showToast('Error updating: '+e.message,'error');}
+  setLoading(false);
+}
+
+async function deleteSKU(sku) {
+  if(!confirm('Delete SKU '+sku+' and all its pack entries? This cannot be undone.'))return;
+  setLoading(true);
+  try {
+    await sbDelete('sku_master','sku=eq.'+sku);
+    await loadSKUs();
+    renderSKUMaster();
+    showToast('✓ SKU '+sku+' deleted','success');
+  } catch(e){showToast('Error deleting: '+e.message,'error');}
+  setLoading(false);
+}
+
+function renderSKUMaster() {
+  var search=(document.getElementById('sm-search').value||'').toUpperCase();
+  var skus=Object.keys(skuMap).filter(function(s){return s.indexOf(search)!==-1;}).sort();
+  document.getElementById('sm-count').textContent=skus.length+' SKUs';
+  document.getElementById('sm-body').innerHTML=!skus.length
+    ?'<tr><td colspan="3"><div class="empty">No SKUs found</div></td></tr>'
+    :skus.map(function(s){
+      var packs=skuMap[s].map(function(p){return '<span class="pack-tag" style="cursor:default">'+p+'</span>';}).join('');
+      return '<tr>'
+        +'<td class="mono"><strong>'+s+'</strong></td>'
+        +'<td>'+packs+'</td>'
+        +'<td><div class="sku-row-actions">'
+        +'<button class="btn btn-sm" onclick="editSKU(\''+s+'\')">Edit</button>'
+        +'<button class="btn btn-sm btn-danger" onclick="deleteSKU(\''+s+'\')">Delete</button>'
+        +'</div></td>'
+        +'</tr>';
+    }).join('');
+}
+
+/* ── EXPORTS ── */
+function downloadCSV(rows, filename) {
+  var csv=rows.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=filename;a.click();
+}
+
+async function exportCSV() {
+  setLoading(true);
+  try {
+    var rows=await sbGet('inventory','select=sku,pack,bin,qty&order=sku.asc');
+    if(!rows.length){showToast('No inventory data to export','error');setLoading(false);return;}
+    var out=[['SKU','Pack','Bin','Qty']];
+    rows.forEach(function(r){out.push([r.sku,r.pack,r.bin,r.qty]);});
+    downloadCSV(out,'stock_'+new Date().toISOString().slice(0,10)+'.csv');
+    showToast('✓ Stock CSV downloaded','success');
+  } catch(e){showToast('Export failed: '+e.message,'error');}
+  setLoading(false);
+}
+
+async function exportLogCSV() {
+  setLoading(true);
+  try {
+    var fsku=(document.getElementById('lf-sku')?document.getElementById('lf-sku').value:'').toUpperCase();
+    var ftype=document.getElementById('lf-type')?document.getElementById('lf-type').value:'';
+    var fdate=document.getElementById('lf-date')?document.getElementById('lf-date').value:'';
+    var lmap={IN:'Put Away',OUT:'Pick',COUNT:'Cycle Count',COR:'Correction'};
+    var filtered=logsCache.filter(function(l){
+      if(fsku&&(l.sku||'').toUpperCase().indexOf(fsku)===-1)return false;
+      if(ftype&&l.type!==ftype)return false;
+      if(fdate&&!l.created_at.startsWith(fdate))return false;
+      return true;
+    });
+    if(!filtered.length){showToast('No log data to export','error');setLoading(false);return;}
+    var out=[['Date','Time','Type','SKU','Pack','Bin','Qty','Note']];
+    filtered.forEach(function(l){
+      var dt=new Date(l.created_at);
+      var fmt=fmtDT(dt);
+      out.push([fmt.date,fmt.time,lmap[l.type]||l.type,l.sku,l.pack,l.bin,l.qty,l.note||'']);
+    });
+    downloadCSV(out,'movement_log_'+new Date().toISOString().slice(0,10)+'.csv');
+    showToast('✓ Movement log CSV downloaded','success');
+  } catch(e){showToast('Export failed: '+e.message,'error');}
+  setLoading(false);
+}
+
+/* ── AUTOCOMPLETE CLOSE ── */
+document.addEventListener('click',function(e){
+  ['pa','pk','cc','cor'].forEach(function(p){
+    var box=document.getElementById(p+'-suggest');
+    if(box&&!box.contains(e.target)&&e.target.id!==p+'-sku') box.style.display='none';
+  });
+});
+
+init();
+</script>
+</body>
+</html>
