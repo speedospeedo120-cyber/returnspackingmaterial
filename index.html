@@ -166,6 +166,21 @@
   .sku-row-actions{display:flex;gap:6px}
   .search-bar{display:flex;gap:10px;margin-bottom:16px}
   .search-bar input{flex:1}
+  textarea{background:var(--bg);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:var(--mono);font-size:12.5px;padding:10px 12px;width:100%;resize:vertical;outline:none;line-height:1.6}
+  textarea:focus{border-color:var(--accent)}
+  textarea::placeholder{color:var(--text3)}
+  .file-drop{border:1.5px dashed var(--border2);border-radius:var(--radius-sm);padding:18px;text-align:center;cursor:pointer;transition:all .15s;color:var(--text2);font-size:13px}
+  .file-drop:hover{border-color:var(--accent);background:var(--accent-dim)}
+  .file-drop.dragover{border-color:var(--accent);background:var(--accent-dim)}
+  .file-drop svg{width:22px;height:22px;margin-bottom:6px;opacity:.6}
+  .bulk-preview{margin-top:12px;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm)}
+  .bulk-preview-row{display:flex;justify-content:space-between;padding:6px 12px;font-size:12px;border-bottom:1px solid var(--border)}
+  .bulk-preview-row:last-child{border:none}
+  .bulk-summary{display:flex;gap:16px;margin-top:10px;font-size:12px;color:var(--text2)}
+  .bulk-summary strong{color:var(--text)}
+  .tab-switch{display:flex;gap:6px;margin-bottom:14px;background:var(--bg);border-radius:var(--radius-sm);padding:3px}
+  .tab-switch button{flex:1;padding:7px;border:none;background:none;color:var(--text2);font-size:12.5px;font-weight:500;border-radius:5px;cursor:pointer;transition:all .15s}
+  .tab-switch button.active{background:var(--surface2);color:var(--text)}
 
   ::-webkit-scrollbar{width:6px;height:6px}
   ::-webkit-scrollbar-track{background:transparent}
@@ -485,6 +500,54 @@
               <button class="btn btn-primary" style="flex:1" onclick="updateSKU()">Update SKU</button>
               <button class="btn" onclick="cancelEdit()">Cancel</button>
             </div>
+          </div>
+        </div>
+
+        <!-- BULK UPLOAD -->
+        <div class="card">
+          <div class="card-title">Bulk Add SKUs &amp; Packs</div>
+          <div class="tab-switch">
+            <button class="active" id="bulk-tab-paste" onclick="switchBulkMode('paste')">Paste Text</button>
+            <button id="bulk-tab-file" onclick="switchBulkMode('file')">Upload File</button>
+          </div>
+
+          <div id="bulk-mode-paste">
+            <div class="field">
+              <label>Paste SKU and Pack (tab or comma separated, one per line)</label>
+              <textarea id="bulk-paste-text" rows="6" placeholder="ES13	101
+FE41	101
+AB07	101
+
+or comma separated:
+ES13,101
+FE41,101"></textarea>
+            </div>
+          </div>
+
+          <div id="bulk-mode-file" style="display:none">
+            <div class="field">
+              <label>Upload .txt or .csv file</label>
+              <div class="file-drop" id="bulk-file-drop" onclick="document.getElementById('bulk-file-input').click()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <div id="bulk-file-label">Click to choose file, or drag & drop here<br><span style="font-size:11px;color:var(--text3)">.txt or .csv — format: SKU [tab/comma] Pack</span></div>
+              </div>
+              <input type="file" id="bulk-file-input" accept=".txt,.csv" style="display:none" onchange="handleBulkFile(event)" />
+            </div>
+          </div>
+
+          <div style="margin-top:14px;display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="previewBulk()">Preview</button>
+            <button class="btn btn-success" id="bulk-confirm-btn" onclick="confirmBulkUpload()" disabled>Upload to Database</button>
+            <button class="btn" onclick="clearBulk()">Clear</button>
+          </div>
+
+          <div id="bulk-summary-wrap" style="display:none">
+            <div class="bulk-summary">
+              <span>Valid rows: <strong id="bulk-valid-count">0</strong></span>
+              <span>Unique SKUs: <strong id="bulk-sku-count">0</strong></span>
+              <span style="color:var(--red)" id="bulk-error-count"></span>
+            </div>
+            <div class="bulk-preview" id="bulk-preview-body"></div>
           </div>
         </div>
 
@@ -999,6 +1062,106 @@ function renderSKUMaster() {
         +'</tr>';
     }).join('');
 }
+
+/* ── BULK UPLOAD ── */
+var bulkParsedRows = [];
+
+function switchBulkMode(mode) {
+  document.getElementById('bulk-tab-paste').classList.toggle('active', mode==='paste');
+  document.getElementById('bulk-tab-file').classList.toggle('active', mode==='file');
+  document.getElementById('bulk-mode-paste').style.display = mode==='paste' ? 'block' : 'none';
+  document.getElementById('bulk-mode-file').style.display = mode==='file' ? 'block' : 'none';
+}
+
+function handleBulkFile(e) {
+  var file = e.target.files[0];
+  if(!file) return;
+  document.getElementById('bulk-file-label').innerHTML = '✓ '+file.name+'<br><span style="font-size:11px;color:var(--text3)">Click Preview to parse</span>';
+  var reader = new FileReader();
+  reader.onload = function(ev) { bulkFileText = ev.target.result; };
+  reader.readAsText(file);
+}
+var bulkFileText = '';
+
+function parseBulkText(text) {
+  var rows = [], errors = 0;
+  text.trim().split('\n').forEach(function(line) {
+    line = line.trim();
+    if(!line) return;
+    var parts = line.indexOf('\t')!==-1 ? line.split('\t') : line.split(',');
+    parts = parts.map(function(p){return p.trim();});
+    if(parts.length < 2) { errors++; return; }
+    var sku = parts[0].toUpperCase();
+    var pack = parseInt(parts[1]);
+    if(!sku || sku==='SKU' || isNaN(pack)) { errors++; return; }
+    rows.push({sku:sku, pack:pack});
+  });
+  return {rows:rows, errors:errors};
+}
+
+function previewBulk() {
+  var isPasteMode = document.getElementById('bulk-mode-paste').style.display !== 'none';
+  var text = isPasteMode ? document.getElementById('bulk-paste-text').value : bulkFileText;
+  if(!text || !text.trim()) { showToast('Paste text or choose a file first', 'error'); return; }
+  var result = parseBulkText(text);
+  bulkParsedRows = result.rows;
+  if(!bulkParsedRows.length) { showToast('No valid rows found. Use format: SKU [tab/comma] Pack', 'error'); document.getElementById('bulk-confirm-btn').disabled = true; return; }
+  var uniqueSkus = new Set(bulkParsedRows.map(function(r){return r.sku;}));
+  document.getElementById('bulk-valid-count').textContent = bulkParsedRows.length;
+  document.getElementById('bulk-sku-count').textContent = uniqueSkus.size;
+  document.getElementById('bulk-error-count').textContent = result.errors ? result.errors+' invalid row(s) skipped' : '';
+  document.getElementById('bulk-preview-body').innerHTML = bulkParsedRows.slice(0,100).map(function(r) {
+    return '<div class="bulk-preview-row"><span class="mono">'+r.sku+'</span><span class="mono" style="color:var(--accent)">Pack '+r.pack+'</span></div>';
+  }).join('') + (bulkParsedRows.length>100 ? '<div class="bulk-preview-row" style="color:var(--text3)">...and '+(bulkParsedRows.length-100)+' more</div>' : '');
+  document.getElementById('bulk-summary-wrap').style.display = 'block';
+  document.getElementById('bulk-confirm-btn').disabled = false;
+  showToast('✓ Parsed '+bulkParsedRows.length+' rows. Review and click Upload.', 'success');
+}
+
+async function confirmBulkUpload() {
+  if(!bulkParsedRows.length) { showToast('Nothing to upload', 'error'); return; }
+  setLoading(true);
+  try {
+    // de-duplicate against existing skuMap to avoid unnecessary writes, but upsert handles conflicts anyway
+    var rows = bulkParsedRows.map(function(r){return {sku:r.sku, pack:r.pack};});
+    var chunkSize = 500;
+    for(var i=0; i<rows.length; i+=chunkSize) {
+      var chunk = rows.slice(i, i+chunkSize);
+      await sbUpsert('sku_master', chunk, 'sku,pack');
+    }
+    await loadSKUs();
+    renderSKUMaster();
+    showToast('✓ Uploaded '+rows.length+' SKU/Pack rows to database', 'success');
+    clearBulk();
+  } catch(e) { showToast('Bulk upload failed: '+e.message, 'error'); }
+  setLoading(false);
+}
+
+function clearBulk() {
+  bulkParsedRows = [];
+  bulkFileText = '';
+  document.getElementById('bulk-paste-text').value = '';
+  document.getElementById('bulk-file-input').value = '';
+  document.getElementById('bulk-file-label').innerHTML = 'Click to choose file, or drag &amp; drop here<br><span style="font-size:11px;color:var(--text3)">.txt or .csv — format: SKU [tab/comma] Pack</span>';
+  document.getElementById('bulk-summary-wrap').style.display = 'none';
+  document.getElementById('bulk-confirm-btn').disabled = true;
+}
+
+/* drag & drop support */
+document.addEventListener('DOMContentLoaded', function() {
+  var drop = document.getElementById('bulk-file-drop');
+  if(!drop) return;
+  ['dragover','dragenter'].forEach(function(evt){drop.addEventListener(evt,function(e){e.preventDefault();drop.classList.add('dragover');});});
+  ['dragleave','drop'].forEach(function(evt){drop.addEventListener(evt,function(e){e.preventDefault();drop.classList.remove('dragover');});});
+  drop.addEventListener('drop', function(e) {
+    var file = e.dataTransfer.files[0];
+    if(!file) return;
+    document.getElementById('bulk-file-label').innerHTML = '✓ '+file.name+'<br><span style="font-size:11px;color:var(--text3)">Click Preview to parse</span>';
+    var reader = new FileReader();
+    reader.onload = function(ev) { bulkFileText = ev.target.result; };
+    reader.readAsText(file);
+  });
+});
 
 /* ── EXPORTS ── */
 function downloadCSV(rows, filename) {
